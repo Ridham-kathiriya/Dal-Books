@@ -1,0 +1,312 @@
+{
+  "AWSTemplateFormatVersion": "2010-09-09",
+  "Resources": {
+    "DalBooksCognitoUserPool": {
+      "Type": "AWS::Cognito::UserPool",
+      "Properties": {
+        "AliasAttributes": [],
+        "AutoVerifiedAttributes": ["email"],
+        "AccountRecoverySetting": {
+          "RecoveryMechanisms": [
+            {
+              "Name": "verified_email",
+              "Priority": 1
+            }
+          ]
+        },
+        "MfaConfiguration": "OFF",
+        "Policies": {
+          "PasswordPolicy": {
+            "MinimumLength": 8,
+            "RequireLowercase": false,
+            "RequireNumbers": false,
+            "RequireSymbols": false,
+            "RequireUppercase": false,
+            "TemporaryPasswordValidityDays": 7
+          }
+        },
+        "Schema": [
+          {
+            "Name": "email",
+            "AttributeDataType": "String",
+            "Mutable": false,
+            "Required": true
+          }
+        ],
+        "UsernameConfiguration": {
+          "CaseSensitive": false
+        },
+        "VerificationMessageTemplate": {
+          "DefaultEmailOption": "CONFIRM_WITH_LINK"
+        },
+        "UserPoolName": "DalBooksUserPool"
+      }
+    },
+
+    "DalBooksCognitoUserPoolClient": {
+      "Type": "AWS::Cognito::UserPoolClient",
+      "Properties": {
+        "UserPoolId": {
+          "Ref": "DalBooksCognitoUserPool"
+        },
+        "AllowedOAuthFlowsUserPoolClient": true,
+        "GenerateSecret": false,
+        "ExplicitAuthFlows": [
+          "ALLOW_CUSTOM_AUTH",
+          "ALLOW_REFRESH_TOKEN_AUTH",
+          "ALLOW_USER_PASSWORD_AUTH",
+          "ALLOW_USER_SRP_AUTH"
+        ],
+        "AllowedOAuthFlows": ["code"],
+        "AllowedOAuthScopes": ["email", "openid"],
+        "CallbackURLs": [
+          "http://localhost:5000/confirmSignUp",
+          "http://localhost:5000/dashboard",
+          "http://localhost:5000/login"
+        ],
+        "LogoutURLs": ["http://localhost:5000/index"]
+      }
+    },
+
+    "DalBooksCognitoUserDomainName": {
+      "Type": "AWS::Cognito::UserPoolDomain",
+      "Properties": {
+        "UserPoolId": {
+          "Ref": "DalBooksCognitoUserPool"
+        },
+        "Domain": "dalbooksdomain"
+      }
+    },
+
+    "BooksDynamoTable": {
+      "Type": "AWS::DynamoDB::Table",
+      "Properties": {
+        "TableName": "Books",
+        "KeySchema": [
+          {
+            "AttributeName": "bookId",
+            "KeyType": "HASH"
+          }
+        ],
+        "AttributeDefinitions": [
+          {
+            "AttributeName": "bookId",
+            "AttributeType": "S"
+          }
+        ],
+        "ProvisionedThroughput": {
+          "ReadCapacityUnits": 5,
+          "WriteCapacityUnits": 5
+        }
+      }
+    },
+
+    "ReviewsDynamoTable": {
+      "Type": "AWS::DynamoDB::Table",
+      "Properties": {
+        "TableName": "Reviews",
+        "KeySchema": [
+          {
+            "AttributeName": "reviewId",
+            "KeyType": "HASH"
+          }
+        ],
+        "AttributeDefinitions": [
+          {
+            "AttributeName": "reviewId",
+            "AttributeType": "S"
+          }
+        ],
+        "ProvisionedThroughput": {
+          "ReadCapacityUnits": 5,
+          "WriteCapacityUnits": 5
+        }
+      }
+    },
+
+    "UsersDynamoTable": {
+      "Type": "AWS::DynamoDB::Table",
+      "Properties": {
+        "TableName": "Users",
+        "KeySchema": [
+          {
+            "AttributeName": "userId",
+            "KeyType": "HASH"
+          }
+        ],
+        "AttributeDefinitions": [
+          {
+            "AttributeName": "userId",
+            "AttributeType": "S"
+          }
+        ],
+        "ProvisionedThroughput": {
+          "ReadCapacityUnits": 5,
+          "WriteCapacityUnits": 5
+        }
+      }
+    },
+    "dalbooksArtifactsBucket": {
+      "Type": "AWS::S3::Bucket",
+      "Description": "S3 bucket creation",
+      "Properties": {
+        "BucketName": "dalbooks-artifacts",
+        "AccessControl": "Private",
+        "PublicAccessBlockConfiguration": {
+          "BlockPublicAcls": true,
+          "BlockPublicPolicy": true,
+          "IgnorePublicAcls": true,
+          "RestrictPublicBuckets": true
+        },
+        "BucketEncryption": {
+          "ServerSideEncryptionConfiguration": [
+            {
+              "ServerSideEncryptionByDefault": {
+                "SSEAlgorithm": "AES256"
+              }
+            }
+          ]
+        },
+        "VersioningConfiguration": {
+          "Status": "Enabled"
+        }
+      }
+    },
+
+    "GetAllBooksLambdaFunction": {
+      "Type": "AWS::Lambda::Function",
+      "Properties": {
+        "FunctionName": "GetAllBooks",
+        "Code": {
+          "S3Bucket": "dalbooks-artifacts",
+          "S3Key": "getAllBooks-def6e9c0-58d9-4b72-b063-3b14c4f1475c.zip"
+        },
+        "Description": "This function will provide all all books",
+        "Handler": "index.handler",
+        "Role": "arn:aws:iam::109293137718:role/LabRole",
+        "Runtime": "Node.js 16.x",
+        "Timeout": 900
+      },
+      "DependsOn": ["dalbooksArtifactsBucket"]
+    },
+
+    "AddBookLambdaFunction": {
+      "Type": "AWS::Lambda::Function",
+      "Properties": {
+        "FunctionName": "csci5409_addBook",
+        "Code": {
+          "S3Bucket": "dalbooks-artifacts",
+          "S3Key": "csci5409_addBook-e67977bb-58b1-41b0-b08c-95709dc71cbb.zip"
+        },
+        "Description": "This function will add books",
+        "Handler": "index.handler",
+        "Role": "arn:aws:iam::109293137718:role/LabRole",
+        "Runtime": "Node.js 16.x",
+        "Timeout": 900
+      },
+      "DependsOn": ["dalbooksArtifactsBucket"]
+    },
+
+    "UpdateBookLambdaFunction": {
+      "Type": "AWS::Lambda::Function",
+      "Properties": {
+        "FunctionName": "csci5409_updateBook",
+        "Code": {
+          "S3Bucket": "dalbooks-artifacts",
+          "S3Key": "csci5409_updateBook-c6e1c850-f97b-47f4-8891-b721cc7b6565.zip"
+        },
+        "Description": "This function will update books",
+        "Handler": "index.handler",
+        "Role": "arn:aws:iam::109293137718:role/LabRole",
+        "Runtime": "Node.js 16.x",
+        "Timeout": 900
+      },
+      "DependsOn": ["dalbooksArtifactsBucket"]
+    },
+
+    "GetAllReviewsLambdaFunction": {
+      "Type": "AWS::Lambda::Function",
+      "Properties": {
+        "FunctionName": "csci5409_getAllReviews",
+        "Code": {
+          "S3Bucket": "dalbooks-artifacts",
+          "S3Key": "csci5409_getAllReviews-3323d867-b883-4e66-841f-45565e933afa.zip"
+        },
+        "Description": "get all review",
+        "Handler": "index.handler",
+        "Role": "arn:aws:iam::109293137718:role/LabRole",
+        "Runtime": "Node.js 16.x",
+        "Timeout": 900
+      },
+      "DependsOn": ["dalbooksArtifactsBucket"]
+    },
+
+    "AddReviewLambdaFunction": {
+      "Type": "AWS::Lambda::Function",
+      "Properties": {
+        "FunctionName": "csci5409_AddReview",
+        "Code": {
+          "S3Bucket": "dalbooks-artifacts",
+          "S3Key": "csci5409_addReview-d0fb19f7-a2a4-4434-ba16-bcdc908a1aa9.zip"
+        },
+        "Description": "add Review",
+        "Handler": "index.handler",
+        "Role": "arn:aws:iam::109293137718:role/LabRole",
+        "Runtime": "Node.js 16.x",
+        "Timeout": 900
+      },
+      "DependsOn": ["dalbooksArtifactsBucket"]
+    },
+
+    "AddUserLambdaFunction": {
+      "Type": "AWS::Lambda::Function",
+      "Properties": {
+        "FunctionName": "csci5409_addUser",
+        "Code": {
+          "S3Bucket": "dalbooks-artifacts",
+          "S3Key": "csci5409_addUser-62c7c709-7465-420e-84cb-a0535bf9a9f4.zip"
+        },
+        "Description": "add User",
+        "Handler": "index.handler",
+        "Role": "arn:aws:iam::109293137718:role/LabRole",
+        "Runtime": "Node.js 16.x",
+        "Timeout": 900
+      },
+      "DependsOn": ["dalbooksArtifactsBucket"]
+    },
+
+    "UpdateUserLambdaFunction": {
+      "Type": "AWS::Lambda::Function",
+      "Properties": {
+        "FunctionName": "csci5409_updateUser",
+        "Code": {
+          "S3Bucket": "dalbooks-artifacts",
+          "S3Key": "csci5409_updateUser-1a968c3f-c309-418c-a120-0813d0c24788.zip"
+        },
+        "Description": "update User",
+        "Handler": "index.handler",
+        "Role": "arn:aws:iam::109293137718:role/LabRole",
+        "Runtime": "Node.js 16.x",
+        "Timeout": 900
+      },
+      "DependsOn": ["dalbooksArtifactsBucket"]
+    },
+
+    "GetUserByIdLambdaFunction": {
+      "Type": "AWS::Lambda::Function",
+      "Properties": {
+        "FunctionName": "csci5409_getUserById",
+        "Code": {
+          "S3Bucket": "dalbooks-artifacts",
+          "S3Key": "csci5409_getUserById-7f48fa9e-75bb-4869-be8f-7f4e69a11cdf.zip"
+        },
+        "Description": "get User by Id",
+        "Handler": "index.handler",
+        "Role": "arn:aws:iam::109293137718:role/LabRole",
+        "Runtime": "Node.js 16.x",
+        "Timeout": 900
+      },
+      "DependsOn": ["dalbooksArtifactsBucket"]
+    }
+  }
+}
